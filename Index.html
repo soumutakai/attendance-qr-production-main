@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>社員受付</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 { font-size: 28px; }
+    #reader {
+      max-width: 500px;
+      margin: 20px auto;
+    }
+    #result {
+      margin-top: 25px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    button {
+      font-size: 20px;
+      padding: 12px 24px;
+      margin: 10px;
+      border-radius: 10px;
+    }
+    .ok { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>社員受付</h1>
+  <p id="status">QRコードをカメラに映してください</p>
+  <div id="reader"></div>
+  <div id="result"></div>
+  <div id="buttons"></div>
+
+<script>
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbyAJlvXfXFLtn0iTYh6obTzeoe-YkTW8YVzVMtAHPEsOzEnkO_6scH3_9W8MOCzE9Yh/exec";
+
+let scanner = null;
+let currentToken = "";
+let processing = false;
+
+function requestJSONP(params, onSuccess, onError) {
+  const callbackName =
+    "cb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+
+  const script = document.createElement("script");
+  let finished = false;
+
+  const timer = setTimeout(() => {
+    cleanup();
+    onError("通信がタイムアウトしました。");
+  }, 15000);
+
+  function cleanup() {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    delete window[callbackName];
+    script.remove();
+  }
+
+  window[callbackName] = result => {
+    cleanup();
+    onSuccess(result);
+  };
+
+  script.onerror = () => {
+    cleanup();
+    onError("サーバーとの通信に失敗しました。");
+  };
+
+  const query = new URLSearchParams({
+    ...params,
+    callback: callbackName,
+    t: Date.now()
+  });
+
+  script.src = APPS_SCRIPT_URL + "?" + query.toString();
+  document.body.appendChild(script);
+}
+
+function showMessage(message, type) {
+  const result = document.getElementById("result");
+  result.className = type || "";
+  result.textContent = message;
+}
+
+function stopScanner() {
+  if (!scanner) return;
+  const oldScanner = scanner;
+  scanner = null;
+  oldScanner.clear().catch(() => {});
+}
+
+function startScanner() {
+  currentToken = "";
+  processing = false;
+  document.getElementById("buttons").innerHTML = "";
+  showMessage("", "");
+  document.getElementById("status").textContent =
+    "QRコードをカメラに映してください";
+
+  scanner = new Html5QrcodeScanner(
+    "reader",
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    false
+  );
+
+  scanner.render(onScanSuccess, () => {});
+}
+
+function onScanSuccess(decodedText) {
+  if (processing) return;
+
+  currentToken = decodedText.trim();
+  if (!currentToken) return;
+
+  processing = true;
+  stopScanner();
+
+  document.getElementById("status").textContent = "";
+  showMessage("社員を確認しています…", "");
+
+  requestJSONP(
+    { action: "lookup", token: currentToken },
+    employee => {
+      if (!employee || !employee.ok || !employee.id) {
+        showMessage(
+          employee?.message || "社員を確認できませんでした。",
+          "error"
+        );
+        showRetry();
+        return;
+      }
+
+      showMessage(employee.name + " さん\nこの名前で記録しますか？", "");
+
+      const buttons = document.getElementById("buttons");
+      buttons.innerHTML = "";
+
+      const okButton = document.createElement("button");
+      okButton.textContent = "本人です";
+      okButton.onclick = () => {
+        okButton.disabled = true;
+        showMessage("出席を記録しています…", "");
+
+        requestJSONP(
+          { action: "attendance", token: currentToken },
+          response => {
+            if (!response || !response.ok) {
+              showMessage(
+                response?.message || "出席記録に失敗しました。",
+                "error"
+              );
+              showRetry();
+              return;
+            }
+
+            showMessage(
+              response.name + " さんの出席を記録しました。",
+              "ok"
+            );
+            buttons.innerHTML = "";
+            document.getElementById("status").textContent =
+              "受付が完了しました";
+          },
+          message => {
+            showMessage(message, "error");
+            showRetry();
+          }
+        );
+      };
+      buttons.appendChild(okButton);
+
+      const retryButton = document.createElement("button");
+      retryButton.textContent = "違います";
+      retryButton.onclick = resetScanner;
+      buttons.appendChild(retryButton);
+    },
+    message => {
+      showMessage(message, "error");
+      showRetry();
+    }
+  );
+}
+
+function showRetry() {
+  const buttons = document.getElementById("buttons");
+  buttons.innerHTML = "";
+
+  const retry = document.createElement("button");
+  retry.textContent = "もう一度読み取る";
+  retry.onclick = resetScanner;
+  buttons.appendChild(retry);
+}
+
+function resetScanner() {
+  stopScanner();
+  document.getElementById("reader").innerHTML = "";
+  startScanner();
+}
+
+startScanner();
+</script>
+</body>
+</html>
