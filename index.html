@@ -1,42 +1,74 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>社員受付</title>
+
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
     body {
       font-family: sans-serif;
       text-align: center;
       padding: 20px;
     }
-    h1 { font-size: 28px; }
+
+    h1 {
+      font-size: 28px;
+    }
+
     #reader {
       max-width: 500px;
       margin: 20px auto;
     }
+
     #result {
       margin-top: 25px;
       font-size: 22px;
       font-weight: bold;
+      white-space: pre-line;
     }
+
+    #status {
+      font-size: 20px;
+    }
+
     button {
       font-size: 20px;
       padding: 12px 24px;
       margin: 10px;
       border-radius: 10px;
+      cursor: pointer;
     }
-    .ok { color: green; }
-    .error { color: red; }
+
+    button:disabled {
+      opacity: 0.5;
+    }
+
+    .ok {
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
   </style>
 </head>
+
 <body>
-  <h1>社員受付</h1>
-  <p id="status">QRコードをカメラに映してください</p>
-  <div id="reader"></div>
-  <div id="result"></div>
-  <div id="buttons"></div>
+
+<h1>社員受付</h1>
+
+<p id="status">QRコードをカメラに映してください</p>
+
+<div id="reader"></div>
+
+<div id="result"></div>
+
+<div id="buttons"></div>
 
 <script>
 const APPS_SCRIPT_URL =
@@ -45,10 +77,72 @@ const APPS_SCRIPT_URL =
 let scanner = null;
 let currentToken = "";
 let processing = false;
+let audioContext = null;
+let resetTimer = null;
 
+
+// ========================================
+// 成功音
+// ========================================
+function prepareAudio() {
+  try {
+    const AudioContextClass =
+      window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextClass) return;
+
+    if (!audioContext) {
+      audioContext = new AudioContextClass();
+    }
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+  } catch (e) {
+    // 音声が使えなくても出席処理は続行
+  }
+}
+
+function playSuccessSound() {
+  if (!audioContext || audioContext.state !== "running") {
+    return;
+  }
+
+  try {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.value = 1000;
+
+    gain.gain.setValueAtTime(
+      0.15,
+      audioContext.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.001,
+      audioContext.currentTime + 0.2
+    );
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.2);
+  } catch (e) {
+    // 音声エラーは無視
+  }
+}
+
+
+// ========================================
+// Apps Scriptとの通信
+// ========================================
 function requestJSONP(params, onSuccess, onError) {
   const callbackName =
-    "cb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+    "cb_" + Date.now() + "_" +
+    Math.floor(Math.random() * 100000);
 
   const script = document.createElement("script");
   let finished = false;
@@ -60,6 +154,7 @@ function requestJSONP(params, onSuccess, onError) {
 
   function cleanup() {
     if (finished) return;
+
     finished = true;
     clearTimeout(timer);
     delete window[callbackName];
@@ -83,107 +178,217 @@ function requestJSONP(params, onSuccess, onError) {
   });
 
   script.src = APPS_SCRIPT_URL + "?" + query.toString();
+
   document.body.appendChild(script);
 }
 
+
+// ========================================
+// メッセージ表示
+// ========================================
 function showMessage(message, type) {
   const result = document.getElementById("result");
+
   result.className = type || "";
   result.textContent = message;
 }
 
-function stopScanner() {
+
+// ========================================
+// カメラ停止
+// ========================================
+async function stopScanner() {
   if (!scanner) return;
+
   const oldScanner = scanner;
   scanner = null;
-  oldScanner.clear().catch(() => {});
+
+  try {
+    await oldScanner.clear();
+  } catch (e) {
+    // すでに停止している場合など
+  }
 }
 
+
+// ========================================
+// カメラボタンの日本語化
+// ========================================
+function translateCameraButtons() {
+  const buttons = document.querySelectorAll("#reader button");
+
+  buttons.forEach(button => {
+    const text = button.textContent.trim();
+
+    if (
+      text.includes("Request Camera Permissions") ||
+      text.includes("Start Camera")
+    ) {
+      button.textContent = "カメラを起動";
+    }
+
+    if (text.includes("Stop Scanning")) {
+      button.textContent = "カメラを停止";
+    }
+
+    if (text.includes("Scan an Image File")) {
+      button.textContent = "画像ファイルを読み取る";
+    }
+  });
+}
+
+
+// ========================================
+// カメラ開始
+// ========================================
 function startScanner() {
   currentToken = "";
   processing = false;
+
   document.getElementById("buttons").innerHTML = "";
   showMessage("", "");
+
   document.getElementById("status").textContent =
-    "QRコードをカメラに映してください";
+    "次の方はQRカードを読み取ってください";
 
   scanner = new Html5QrcodeScanner(
     "reader",
-    { fps: 10, qrbox: { width: 250, height: 250 } },
+    {
+      fps: 15,
+      qrbox: {
+        width: 280,
+        height: 280
+      },
+      rememberLastUsedCamera: true
+    },
     false
   );
 
   scanner.render(onScanSuccess, () => {});
+
+  // ライブラリが作るボタンを日本語にする
+  setTimeout(translateCameraButtons, 300);
+  setTimeout(translateCameraButtons, 1000);
 }
 
-function onScanSuccess(decodedText) {
+
+// ========================================
+// QRコード読み取り
+// ========================================
+async function onScanSuccess(decodedText) {
   if (processing) return;
 
   currentToken = decodedText.trim();
+
   if (!currentToken) return;
 
   processing = true;
-  stopScanner();
 
-  document.getElementById("status").textContent = "";
+  await stopScanner();
+
+  document.getElementById("status").textContent =
+    "社員情報を確認中です…";
+
   showMessage("社員を確認しています…", "");
 
   requestJSONP(
-    { action: "lookup", token: currentToken },
+    {
+      action: "lookup",
+      token: currentToken
+    },
+
     employee => {
       if (!employee || !employee.ok || !employee.id) {
         showMessage(
           employee?.message || "社員を確認できませんでした。",
           "error"
         );
+
         showRetry();
         return;
       }
 
-      showMessage(employee.name + " さん\nこの名前で記録しますか？", "");
+      document.getElementById("status").textContent =
+        "社員情報を確認しました";
+
+      showMessage(
+        employee.name + " さん\nこの名前で記録しますか？",
+        ""
+      );
 
       const buttons = document.getElementById("buttons");
       buttons.innerHTML = "";
 
       const okButton = document.createElement("button");
       okButton.textContent = "本人です";
+
       okButton.onclick = () => {
+        if (okButton.disabled) return;
+
         okButton.disabled = true;
+
+        // ボタン操作時に音声を準備
+        prepareAudio();
+
         showMessage("出席を記録しています…", "");
 
+        document.getElementById("status").textContent =
+          "出席情報を登録中です";
+
         requestJSONP(
-          { action: "attendance", token: currentToken },
+          {
+            action: "attendance",
+            token: currentToken
+          },
+
           response => {
             if (!response || !response.ok) {
               showMessage(
                 response?.message || "出席記録に失敗しました。",
                 "error"
               );
+
               showRetry();
               return;
             }
 
+            // 出席記録成功
+            playSuccessSound();
+
             showMessage(
-              response.name + " さんの出席を記録しました。",
+              "✓ " + response.name + " さんの出席を記録しました。",
               "ok"
             );
+
             buttons.innerHTML = "";
+
             document.getElementById("status").textContent =
-              "受付が完了しました";
+              "受付完了！次の方をお待ちしています";
+
+            // 2秒後に次の人の受付へ戻る
+            clearTimeout(resetTimer);
+
+            resetTimer = setTimeout(() => {
+              resetScanner();
+            }, 2000);
           },
+
           message => {
             showMessage(message, "error");
             showRetry();
           }
         );
       };
+
       buttons.appendChild(okButton);
 
       const retryButton = document.createElement("button");
       retryButton.textContent = "違います";
       retryButton.onclick = resetScanner;
+
       buttons.appendChild(retryButton);
     },
+
     message => {
       showMessage(message, "error");
       showRetry();
@@ -191,23 +396,46 @@ function onScanSuccess(decodedText) {
   );
 }
 
+
+// ========================================
+// 再読み取りボタン
+// ========================================
 function showRetry() {
+  document.getElementById("status").textContent =
+    "QRコードをもう一度確認してください";
+
   const buttons = document.getElementById("buttons");
   buttons.innerHTML = "";
 
   const retry = document.createElement("button");
   retry.textContent = "もう一度読み取る";
   retry.onclick = resetScanner;
+
   buttons.appendChild(retry);
 }
 
-function resetScanner() {
-  stopScanner();
+
+// ========================================
+// 次の人の受付へ戻る
+// ========================================
+async function resetScanner() {
+  clearTimeout(resetTimer);
+  resetTimer = null;
+
+  await stopScanner();
+
   document.getElementById("reader").innerHTML = "";
+
   startScanner();
 }
 
+
+// ========================================
+// 初回起動
+// ========================================
 startScanner();
+
 </script>
+
 </body>
 </html>
