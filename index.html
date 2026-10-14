@@ -10,69 +10,121 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: sans-serif;
       text-align: center;
       padding: 16px;
       margin: 0;
-      background: #fff;
+      background: #f7f9fc;
+      color: #222;
     }
 
     h1 {
-      font-size: 28px;
+      font-size: 32px;
+      margin: 12px 0 18px;
     }
 
     #status {
-      font-size: 20px;
+      font-size: 21px;
+      font-weight: bold;
       min-height: 1.5em;
+      margin: 12px 0;
     }
 
     #reader {
       max-width: 500px;
       margin: 16px auto;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
     }
 
     #reader video {
       max-width: 100%;
     }
 
+    #reader button {
+      font-size: 17px;
+      padding: 10px 16px;
+      margin: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
     #result {
       margin: 20px auto;
-      padding: 14px;
-      max-width: 500px;
-      box-sizing: border-box;
-      font-size: 22px;
+      padding: 28px 16px;
+      max-width: 600px;
+      min-height: 100px;
+      font-size: 30px;
       font-weight: bold;
+      line-height: 1.6;
       white-space: pre-line;
       overflow-wrap: anywhere;
-      border-radius: 10px;
+      border-radius: 18px;
+      border: 4px solid transparent;
+      transition: background 0.2s;
     }
 
     #result.ok {
       color: #087b27;
-      background: #e8f7ec;
+      background: #d9fbe2;
+      border-color: #16a34a;
+      box-shadow: 0 4px 16px rgba(0, 120, 40, 0.18);
     }
 
     #result.error {
       color: #c62828;
       background: #fff0f0;
+      border-color: #dc2626;
     }
 
-    button {
-      font-size: 18px;
-      padding: 12px 22px;
+    #result.waiting {
+      color: #444;
+      background: #edf2f7;
+      border-color: #cbd5e1;
+    }
+
+    #buttons button {
+      font-size: 19px;
+      font-weight: bold;
+      padding: 13px 24px;
       margin: 8px;
+      border: none;
       border-radius: 10px;
+      background: #2563eb;
+      color: #fff;
       cursor: pointer;
     }
 
-    button:disabled {
+    #buttons button:disabled {
       opacity: 0.5;
+      cursor: default;
     }
 
     .hint {
-      font-size: 14px;
-      color: #666;
+      font-size: 15px;
+      line-height: 1.7;
+      color: #555;
+    }
+
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 27px;
+      }
+
+      #status {
+        font-size: 18px;
+      }
+
+      #result {
+        font-size: 25px;
+        padding: 22px 12px;
+      }
     }
   </style>
 </head>
@@ -90,13 +142,13 @@
   <div id="buttons"></div>
 
   <p class="hint">
-    QRカードを順番にカメラへ映してください。
+    QRカードを1枚ずつカメラに映してください。<br>
     出席記録は自動で行われます。
   </p>
 
   <script>
     // ========================================
-    // Apps Script URL
+    // Apps Script URL（本番用）
     // ========================================
     const APPS_SCRIPT_URL =
       "https://script.google.com/macros/s/AKfycbyAJlvXfXFLtn0iTYh6obTzeoe-YkTW8YVzVMtAHPEsOzEnkO_6scH3_9W8MOCzE9Yh/exec";
@@ -107,11 +159,14 @@
     let scanner = null;
     let processing = false;
 
-    // 直前に処理したQRの重複登録を防ぐ
+    // 直前に処理したQR
     let lastHandledToken = "";
 
-    let audioContext = null;
+    // 結果表示タイマー
     let messageTimer = null;
+
+    // 音声
+    let audioContext = null;
 
     // ========================================
     // QRIDの表記統一
@@ -123,8 +178,8 @@
     }
 
     // ========================================
-    // 音声の準備
-    // 最初の画面操作でブラウザの音声制限に対応
+    // 音声を準備
+    // 最初の画面操作でブラウザの制限に対応
     // ========================================
     function prepareAudio() {
       try {
@@ -141,8 +196,8 @@
         if (audioContext.state === "suspended") {
           audioContext.resume().catch(() => {});
         }
-      } catch (e) {
-        // 音声が使えなくても受付を継続
+      } catch (error) {
+        console.log("音声を準備できませんでした", error);
       }
     }
 
@@ -152,42 +207,92 @@
       { once: true }
     );
 
+    // ========================================
+    // 成功音：大きなピンポーン！
+    // 出席記録の成功後に再生
+    // ========================================
     function playSuccessSound() {
-      if (
-        !audioContext ||
-        audioContext.state !== "running"
-      ) {
-        return;
-      }
-
       try {
-        const oscillator =
-          audioContext.createOscillator();
+        const AudioContextClass =
+          window.AudioContext ||
+          window.webkitAudioContext;
 
-        const gain = audioContext.createGain();
+        if (!AudioContextClass) return;
 
-        oscillator.type = "sine";
-        oscillator.frequency.value = 1000;
+        if (!audioContext) {
+          audioContext = new AudioContextClass();
+        }
 
-        gain.gain.setValueAtTime(
-          0.15,
-          audioContext.currentTime
-        );
+        const play = () => {
+          const now = audioContext.currentTime;
 
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          audioContext.currentTime + 0.2
-        );
+          const tones = [
+            {
+              frequency: 880,
+              start: 0,
+              duration: 0.22
+            },
+            {
+              frequency: 1320,
+              start: 0.20,
+              duration: 0.40
+            }
+          ];
 
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
+          tones.forEach(tone => {
+            const oscillator =
+              audioContext.createOscillator();
 
-        oscillator.start();
-        oscillator.stop(
-          audioContext.currentTime + 0.2
-        );
-      } catch (e) {
-        // 音声エラーは無視
+            const gain =
+              audioContext.createGain();
+
+            oscillator.type = "sine";
+            oscillator.frequency.value =
+              tone.frequency;
+
+            gain.gain.setValueAtTime(
+              0.0001,
+              now + tone.start
+            );
+
+            gain.gain.exponentialRampToValueAtTime(
+              0.8,
+              now + tone.start + 0.025
+            );
+
+            gain.gain.setValueAtTime(
+              0.8,
+              now + tone.start + tone.duration - 0.06
+            );
+
+            gain.gain.exponentialRampToValueAtTime(
+              0.0001,
+              now + tone.start + tone.duration
+            );
+
+            oscillator.connect(gain);
+            gain.connect(audioContext.destination);
+
+            oscillator.start(now + tone.start);
+
+            oscillator.stop(
+              now + tone.start + tone.duration
+            );
+          });
+        };
+
+        if (audioContext.state === "suspended") {
+          audioContext.resume()
+            .then(play)
+            .catch(error => {
+              console.log("成功音を再生できませんでした", error);
+            });
+        } else {
+          play();
+        }
+
+      } catch (error) {
+        console.log("成功音を再生できませんでした", error);
       }
     }
 
@@ -196,7 +301,8 @@
     // ========================================
     function requestJSONP(params, onSuccess, onError) {
       const callbackName =
-        "cb_" + Date.now() + "_" +
+        "qrCallback_" +
+        Date.now() + "_" +
         Math.floor(Math.random() * 1000000);
 
       const script = document.createElement("script");
@@ -212,20 +318,21 @@
         if (finished) return;
 
         finished = true;
+
         clearTimeout(timer);
 
         try {
           delete window[callbackName];
-        } catch (e) {
+        } catch (error) {
           window[callbackName] = undefined;
         }
 
         script.remove();
       }
 
-      window[callbackName] = result => {
+      window[callbackName] = response => {
         cleanup();
-        onSuccess(result);
+        onSuccess(response);
       };
 
       script.onerror = () => {
@@ -248,6 +355,11 @@
     // ========================================
     // 画面表示
     // ========================================
+    function setStatus(message) {
+      document.getElementById("status").textContent =
+        message;
+    }
+
     function showMessage(message, type) {
       const result = document.getElementById("result");
 
@@ -255,13 +367,18 @@
       result.className = type || "";
     }
 
-    function setStatus(message) {
-      document.getElementById("status").textContent =
-        message;
+    function clearResultLater() {
+      clearTimeout(messageTimer);
+
+      messageTimer = setTimeout(() => {
+        if (!processing) {
+          showMessage("", "");
+        }
+      }, 2500);
     }
 
     // ========================================
-    // QR認識後の処理
+    // QR認識後の自動出席記録
     // カメラは停止しない
     // ========================================
     function onScanSuccess(decodedText) {
@@ -271,18 +388,25 @@
 
       if (!token) return;
 
-      // 同じカードが映り続けても再登録しない
+      // 同じQRが映り続けている場合は再送信しない
       if (token === lastHandledToken) return;
 
-      // 通信開始前にロックして二重送信を防止
+      // 通信開始前にロック
       processing = true;
       lastHandledToken = token;
 
-      setStatus("QRを認識しました。出席を記録しています…");
-      showMessage("出席記録中…", "");
+      clearTimeout(messageTimer);
+
       document.getElementById("buttons").innerHTML = "";
 
-      // 社員認証と出席記録を1回の通信で実行
+      setStatus("認証中・出席を記録しています…");
+
+      showMessage(
+        "認証中…",
+        "waiting"
+      );
+
+      // QRID検証と出席記録を1回の通信で実行
       requestJSONP(
         {
           action: "attendance",
@@ -294,78 +418,85 @@
 
           if (!response || !response.ok) {
             setStatus(
-              "記録できませんでした。QRカードを確認してください。"
+              "出席記録ができませんでした"
             );
 
             showMessage(
-              response?.message ||
-                "出席記録に失敗しました。",
+              "✕ 記録失敗\n\n" +
+              (
+                response?.message ||
+                "QRカードを確認してください。"
+              ),
               "error"
             );
 
-            showRetryButton(token);
+            showRetryButton();
             return;
           }
 
-          // 記録成功
+          // 記録成功時に音を鳴らす
           playSuccessSound();
 
           setStatus(
-            "受付中です。次の方はQRカードを映してください。"
+            "次の方を受付できます"
           );
 
           showMessage(
-            "✓ " + response.name +
-              " さん\n出席記録が完了しました",
+            "✓ 受付完了！\n" +
+            response.name + " さん\n\n" +
+            "出席記録が完了しました",
             "ok"
           );
 
-          // 結果表示だけを時間経過で消す
-          // カメラは停止・再起動しない
-          clearTimeout(messageTimer);
-
-          messageTimer = setTimeout(() => {
-            if (!processing) {
-              showMessage("", "");
-            }
-          }, 1800);
+          // 表示だけ消す。カメラは動かしたまま
+          clearResultLater();
         },
 
         message => {
           processing = false;
 
           setStatus(
-            "通信に失敗しました。もう一度お試しください。"
+            "通信に失敗しました"
           );
 
-          showMessage(message, "error");
-          showRetryButton(token);
+          showMessage(
+            "✕ 通信エラー\n\n" + message,
+            "error"
+          );
+
+          showRetryButton();
         }
       );
     }
 
     // ========================================
-    // 同じQRの再試行
+    // エラー時の再試行
     // ========================================
-    function showRetryButton(token) {
-      const buttons = document.getElementById("buttons");
+    function showRetryButton() {
+      const buttons =
+        document.getElementById("buttons");
 
       buttons.innerHTML = "";
 
       const retry = document.createElement("button");
-      retry.textContent = "このQRを再試行";
+
+      retry.textContent = "もう一度読み取る";
 
       retry.onclick = () => {
         if (processing) return;
 
-        // 同じカードをもう一度処理できるようにする
+        // 同じカードでも再試行可能にする
         lastHandledToken = "";
+
         buttons.innerHTML = "";
 
         showMessage("", "");
-        setStatus("QRカードをカメラに映してください。");
 
-        // カメラはそのまま動かし続ける
+        setStatus(
+          "QRカードをカメラに映してください"
+        );
+
+        // カメラの再起動はしない
       };
 
       buttons.appendChild(retry);
@@ -403,11 +534,15 @@
       if (scanner) return;
 
       if (typeof Html5QrcodeScanner === "undefined") {
-        setStatus("QR読み取りライブラリを読み込めません。");
+        setStatus(
+          "QR読み取りライブラリを読み込めません"
+        );
+
         showMessage(
           "インターネット接続を確認して再読み込みしてください。",
           "error"
         );
+
         return;
       }
 
@@ -432,21 +567,22 @@
             onScanSuccess(decodedText);
           },
           () => {
-            // QRが映っていない間のエラーは表示しない
+            // QR未検出時は何も表示しない
           }
         );
 
         setTimeout(translateCameraButtons, 300);
         setTimeout(translateCameraButtons, 1000);
+        setTimeout(translateCameraButtons, 2000);
 
         setStatus(
-          "QRカードをカメラに映してください。"
+          "QRカードをカメラに映してください"
         );
 
       } catch (error) {
         scanner = null;
 
-        setStatus("カメラを起動できません。");
+        setStatus("カメラを起動できません");
 
         showMessage(
           "カメラの起動に失敗しました。ページを再読み込みしてください。",
