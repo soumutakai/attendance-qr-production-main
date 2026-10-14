@@ -13,29 +13,13 @@
     body {
       font-family: sans-serif;
       text-align: center;
-      padding: 20px;
+      padding: 16px;
       margin: 0;
-      background: #ffffff;
+      background: #fff;
     }
 
     h1 {
       font-size: 28px;
-    }
-
-    #reader {
-      max-width: 500px;
-      margin: 20px auto;
-    }
-
-    #reader video {
-      max-width: 100%;
-    }
-
-    #result {
-      margin-top: 25px;
-      font-size: 22px;
-      font-weight: bold;
-      white-space: pre-line;
     }
 
     #status {
@@ -43,25 +27,52 @@
       min-height: 1.5em;
     }
 
+    #reader {
+      max-width: 500px;
+      margin: 16px auto;
+    }
+
+    #reader video {
+      max-width: 100%;
+    }
+
+    #result {
+      margin: 20px auto;
+      padding: 14px;
+      max-width: 500px;
+      box-sizing: border-box;
+      font-size: 22px;
+      font-weight: bold;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+      border-radius: 10px;
+    }
+
+    #result.ok {
+      color: #087b27;
+      background: #e8f7ec;
+    }
+
+    #result.error {
+      color: #c62828;
+      background: #fff0f0;
+    }
+
     button {
-      font-size: 20px;
-      padding: 12px 24px;
-      margin: 10px;
+      font-size: 18px;
+      padding: 12px 22px;
+      margin: 8px;
       border-radius: 10px;
       cursor: pointer;
     }
 
     button:disabled {
       opacity: 0.5;
-      cursor: wait;
     }
 
-    .ok {
-      color: green;
-    }
-
-    .error {
-      color: red;
+    .hint {
+      font-size: 14px;
+      color: #666;
     }
   </style>
 </head>
@@ -70,13 +81,18 @@
 
   <h1>社員受付</h1>
 
-  <p id="status">社員情報を読み込んでいます…</p>
+  <p id="status">カメラを準備しています…</p>
 
   <div id="reader"></div>
 
-  <div id="result"></div>
+  <div id="result" aria-live="polite"></div>
 
   <div id="buttons"></div>
+
+  <p class="hint">
+    QRカードを順番にカメラへ映してください。
+    出席記録は自動で行われます。
+  </p>
 
   <script>
     // ========================================
@@ -89,12 +105,13 @@
     // 状態管理
     // ========================================
     let scanner = null;
-    let employees = [];
-    let currentToken = "";
     let processing = false;
+
+    // 直前に処理したQRの重複登録を防ぐ
+    let lastHandledToken = "";
+
     let audioContext = null;
-    let resetTimer = null;
-    let scannerGeneration = 0;
+    let messageTimer = null;
 
     // ========================================
     // QRIDの表記統一
@@ -106,7 +123,8 @@
     }
 
     // ========================================
-    // 成功音
+    // 音声の準備
+    // 最初の画面操作でブラウザの音声制限に対応
     // ========================================
     function prepareAudio() {
       try {
@@ -124,19 +142,28 @@
           audioContext.resume().catch(() => {});
         }
       } catch (e) {
-        // 音声が使えなくても受付は続行
+        // 音声が使えなくても受付を継続
       }
     }
 
+    document.addEventListener(
+      "pointerdown",
+      prepareAudio,
+      { once: true }
+    );
+
     function playSuccessSound() {
-      if (!audioContext) return;
+      if (
+        !audioContext ||
+        audioContext.state !== "running"
+      ) {
+        return;
+      }
 
       try {
-        if (audioContext.state !== "running") {
-          return;
-        }
+        const oscillator =
+          audioContext.createOscillator();
 
-        const oscillator = audioContext.createOscillator();
         const gain = audioContext.createGain();
 
         oscillator.type = "sine";
@@ -173,6 +200,7 @@
         Math.floor(Math.random() * 1000000);
 
       const script = document.createElement("script");
+
       let finished = false;
 
       const timer = setTimeout(() => {
@@ -218,144 +246,172 @@
     }
 
     // ========================================
-    // メッセージ表示
+    // 画面表示
     // ========================================
     function showMessage(message, type) {
       const result = document.getElementById("result");
 
-      result.className = type || "";
       result.textContent = message;
+      result.className = type || "";
+    }
+
+    function setStatus(message) {
+      document.getElementById("status").textContent =
+        message;
     }
 
     // ========================================
-    // カメラ停止
+    // QR認識後の処理
+    // カメラは停止しない
     // ========================================
-    async function stopScanner() {
-      const oldScanner = scanner;
+    function onScanSuccess(decodedText) {
+      if (processing) return;
 
-      // 古い読み取りイベントを無効にする
-      scanner = null;
-      scannerGeneration++;
+      const token = normalizeToken(decodedText);
 
-      if (!oldScanner) return;
+      if (!token) return;
 
-      try {
-        await oldScanner.clear();
-      } catch (e) {
-        // 停止済みの場合など
-      }
+      // 同じカードが映り続けても再登録しない
+      if (token === lastHandledToken) return;
+
+      // 通信開始前にロックして二重送信を防止
+      processing = true;
+      lastHandledToken = token;
+
+      setStatus("QRを認識しました。出席を記録しています…");
+      showMessage("出席記録中…", "");
+      document.getElementById("buttons").innerHTML = "";
+
+      // 社員認証と出席記録を1回の通信で実行
+      requestJSONP(
+        {
+          action: "attendance",
+          token: token
+        },
+
+        response => {
+          processing = false;
+
+          if (!response || !response.ok) {
+            setStatus(
+              "記録できませんでした。QRカードを確認してください。"
+            );
+
+            showMessage(
+              response?.message ||
+                "出席記録に失敗しました。",
+              "error"
+            );
+
+            showRetryButton(token);
+            return;
+          }
+
+          // 記録成功
+          playSuccessSound();
+
+          setStatus(
+            "受付中です。次の方はQRカードを映してください。"
+          );
+
+          showMessage(
+            "✓ " + response.name +
+              " さん\n出席記録が完了しました",
+            "ok"
+          );
+
+          // 結果表示だけを時間経過で消す
+          // カメラは停止・再起動しない
+          clearTimeout(messageTimer);
+
+          messageTimer = setTimeout(() => {
+            if (!processing) {
+              showMessage("", "");
+            }
+          }, 1800);
+        },
+
+        message => {
+          processing = false;
+
+          setStatus(
+            "通信に失敗しました。もう一度お試しください。"
+          );
+
+          showMessage(message, "error");
+          showRetryButton(token);
+        }
+      );
+    }
+
+    // ========================================
+    // 同じQRの再試行
+    // ========================================
+    function showRetryButton(token) {
+      const buttons = document.getElementById("buttons");
+
+      buttons.innerHTML = "";
+
+      const retry = document.createElement("button");
+      retry.textContent = "このQRを再試行";
+
+      retry.onclick = () => {
+        if (processing) return;
+
+        // 同じカードをもう一度処理できるようにする
+        lastHandledToken = "";
+        buttons.innerHTML = "";
+
+        showMessage("", "");
+        setStatus("QRカードをカメラに映してください。");
+
+        // カメラはそのまま動かし続ける
+      };
+
+      buttons.appendChild(retry);
     }
 
     // ========================================
     // カメラボタンの日本語化
     // ========================================
     function translateCameraButtons() {
-      const buttons =
-        document.querySelectorAll("#reader button");
+      document.querySelectorAll("#reader button")
+        .forEach(button => {
+          const text = button.textContent.trim();
 
-      buttons.forEach(button => {
-        const text = button.textContent.trim();
-
-        if (
-          text.includes("Request Camera Permissions") ||
-          text.includes("Start Camera")
-        ) {
-          button.textContent = "カメラを起動";
-        }
-
-        if (text.includes("Stop Scanning")) {
-          button.textContent = "カメラを停止";
-        }
-
-        if (text.includes("Scan an Image File")) {
-          button.textContent = "画像ファイルを読み取る";
-        }
-      });
-    }
-
-    // ========================================
-    // 社員一覧を一括取得
-    // ========================================
-    function loadEmployeesAndStart() {
-      processing = true;
-
-      document.getElementById("status").textContent =
-        "社員情報を読み込んでいます…";
-
-      document.getElementById("buttons").innerHTML = "";
-      showMessage("", "");
-
-      requestJSONP(
-        { action: "employees" },
-
-        response => {
           if (
-            !response ||
-            !response.ok ||
-            !Array.isArray(response.employees)
+            text.includes("Request Camera Permissions") ||
+            text.includes("Start Camera")
           ) {
-            processing = false;
-
-            showMessage(
-              "社員情報を取得できませんでした。",
-              "error"
-            );
-
-            showLoadRetry();
-            return;
+            button.textContent = "カメラを起動";
           }
 
-          employees = response.employees.map(employee => ({
-            id: String(employee.id || "").trim(),
-            name: String(employee.name || "").trim(),
-            token: normalizeToken(employee.token)
-          }));
+          if (text.includes("Stop Scanning")) {
+            button.textContent = "カメラを停止";
+          }
 
-          processing = false;
-          startScanner();
-        },
-
-        message => {
-          processing = false;
-          showMessage(message, "error");
-          showLoadRetry();
-        }
-      );
-    }
-
-    function showLoadRetry() {
-      const buttons = document.getElementById("buttons");
-      buttons.innerHTML = "";
-
-      const retry = document.createElement("button");
-      retry.textContent = "社員情報を再取得";
-      retry.onclick = loadEmployeesAndStart;
-
-      buttons.appendChild(retry);
+          if (text.includes("Scan an Image File")) {
+            button.textContent = "画像ファイルを読み取る";
+          }
+        });
     }
 
     // ========================================
-    // カメラ開始
+    // カメラを最初の1回だけ起動
     // ========================================
     function startScanner() {
       if (scanner) return;
 
-      clearTimeout(resetTimer);
-      resetTimer = null;
+      if (typeof Html5QrcodeScanner === "undefined") {
+        setStatus("QR読み取りライブラリを読み込めません。");
+        showMessage(
+          "インターネット接続を確認して再読み込みしてください。",
+          "error"
+        );
+        return;
+      }
 
-      currentToken = "";
-      processing = false;
-
-      document.getElementById("buttons").innerHTML = "";
-      showMessage("", "");
-
-      document.getElementById("status").textContent =
-        "QRカードをカメラに映してください";
-
-      const reader = document.getElementById("reader");
-      reader.innerHTML = "";
-
-      const generation = ++scannerGeneration;
+      setStatus("カメラを起動しています…");
 
       try {
         scanner = new Html5QrcodeScanner(
@@ -373,186 +429,36 @@
 
         scanner.render(
           decodedText => {
-            // 古いカメラから届いたイベントは無視
-            if (generation !== scannerGeneration) return;
-
             onScanSuccess(decodedText);
           },
-          () => {}
+          () => {
+            // QRが映っていない間のエラーは表示しない
+          }
         );
 
         setTimeout(translateCameraButtons, 300);
         setTimeout(translateCameraButtons, 1000);
 
+        setStatus(
+          "QRカードをカメラに映してください。"
+        );
+
       } catch (error) {
         scanner = null;
 
+        setStatus("カメラを起動できません。");
+
         showMessage(
-          "カメラを起動できません。画面を再読み込みしてください。",
+          "カメラの起動に失敗しました。ページを再読み込みしてください。",
           "error"
         );
-
-        document.getElementById("status").textContent =
-          "カメラの起動に失敗しました";
       }
-    }
-
-    // ========================================
-    // QRコード読み取り・社員認証
-    // ========================================
-    async function onScanSuccess(decodedText) {
-      if (processing) return;
-
-      currentToken = normalizeToken(decodedText);
-
-      if (!currentToken) return;
-
-      processing = true;
-
-      // 読み取り直後にカメラを停止
-      await stopScanner();
-
-      document.getElementById("status").textContent =
-        "社員情報を確認中です…";
-
-      // サーバー通信せず端末内で社員を検索
-      const employee = employees.find(
-        item => item.token === currentToken
-      );
-
-      if (!employee) {
-        showMessage(
-          "社員が見つかりません。\nQRカードを確認してください。",
-          "error"
-        );
-
-        showRetry();
-        return;
-      }
-
-      document.getElementById("status").textContent =
-        "社員情報を確認しました";
-
-      showMessage(
-        employee.name + " さん\nこの名前で記録しますか？",
-        ""
-      );
-
-      const buttons = document.getElementById("buttons");
-      buttons.innerHTML = "";
-
-      const okButton = document.createElement("button");
-      okButton.textContent = "本人です";
-
-      okButton.onclick = () => {
-        if (okButton.disabled) return;
-
-        okButton.disabled = true;
-        prepareAudio();
-
-        showMessage("出席を記録しています…", "");
-
-        document.getElementById("status").textContent =
-          "出席情報を登録中です";
-
-        requestJSONP(
-          {
-            action: "attendance",
-            token: currentToken
-          },
-
-          response => {
-            if (!response || !response.ok) {
-              showMessage(
-                response?.message ||
-                  "出席記録に失敗しました。",
-                "error"
-              );
-
-              showRetry();
-              return;
-            }
-
-            // 出席記録成功
-            playSuccessSound();
-
-            showMessage(
-              "✓ " + response.name +
-                " さんの出席を記録しました。",
-              "ok"
-            );
-
-            buttons.innerHTML = "";
-
-            document.getElementById("status").textContent =
-              "受付完了！次の方をお待ちしています";
-
-            // 次の人の受付へ
-            clearTimeout(resetTimer);
-
-            resetTimer = setTimeout(() => {
-              resetScanner();
-            }, 1000);
-          },
-
-          message => {
-            showMessage(message, "error");
-            showRetry();
-          }
-        );
-      };
-
-      buttons.appendChild(okButton);
-
-      const retryButton = document.createElement("button");
-      retryButton.textContent = "違います";
-      retryButton.onclick = resetScanner;
-
-      buttons.appendChild(retryButton);
-    }
-
-    // ========================================
-    // 再読み取りボタン
-    // ========================================
-    function showRetry() {
-      const buttons = document.getElementById("buttons");
-
-      document.getElementById("status").textContent =
-        "QRコードをもう一度確認してください";
-
-      buttons.innerHTML = "";
-
-      const retry = document.createElement("button");
-      retry.textContent = "もう一度読み取る";
-      retry.onclick = resetScanner;
-
-      buttons.appendChild(retry);
-    }
-
-    // ========================================
-    // 次の人の受付へ戻る
-    // ========================================
-    async function resetScanner() {
-      if (processing && scanner) {
-        // 読み取り中の二重操作を防ぐ
-        return;
-      }
-
-      clearTimeout(resetTimer);
-      resetTimer = null;
-
-      await stopScanner();
-
-      document.getElementById("reader").innerHTML = "";
-
-      processing = false;
-      startScanner();
     }
 
     // ========================================
     // 初回起動
     // ========================================
-    loadEmployeesAndStart();
+    startScanner();
   </script>
 
 </body>
