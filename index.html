@@ -17,7 +17,7 @@
     body {
       font-family: sans-serif;
       text-align: center;
-      padding: 16px;
+      padding: 12px;
       margin: 0;
       background: #f7f9fc;
       color: #222;
@@ -25,49 +25,27 @@
 
     h1 {
       font-size: 32px;
-      margin: 12px 0 18px;
+      margin: 10px 0;
     }
 
-    #status {
-      font-size: 21px;
-      font-weight: bold;
-      min-height: 1.5em;
-      margin: 12px 0;
-    }
-
-    #reader {
-      max-width: 500px;
-      margin: 16px auto;
-      background: #fff;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    #reader video {
-      max-width: 100%;
-    }
-
-    #reader button {
-      font-size: 17px;
-      padding: 10px 16px;
-      margin: 6px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
+    /* 受付結果：画面上部 */
     #result {
-      margin: 20px auto;
-      padding: 28px 16px;
-      max-width: 600px;
-      min-height: 100px;
+      margin: 12px auto;
+      padding: 20px 12px;
+      width: 100%;
+      max-width: 650px;
+      min-height: 0;
       font-size: 30px;
       font-weight: bold;
-      line-height: 1.6;
+      line-height: 1.5;
       white-space: pre-line;
       overflow-wrap: anywhere;
-      border-radius: 18px;
       border: 4px solid transparent;
-      transition: background 0.2s;
+      border-radius: 16px;
+    }
+
+    #result:empty {
+      display: none;
     }
 
     #result.ok {
@@ -89,6 +67,34 @@
       border-color: #cbd5e1;
     }
 
+    #status {
+      font-size: 21px;
+      font-weight: bold;
+      min-height: 1.5em;
+      margin: 10px 0;
+    }
+
+    /* カメラ */
+    #reader {
+      max-width: 500px;
+      margin: 12px auto;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    #reader video {
+      max-width: 100%;
+    }
+
+    #reader button {
+      font-size: 17px;
+      padding: 10px 16px;
+      margin: 6px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
     #buttons button {
       font-size: 19px;
       font-weight: bold;
@@ -99,11 +105,6 @@
       background: #2563eb;
       color: #fff;
       cursor: pointer;
-    }
-
-    #buttons button:disabled {
-      opacity: 0.5;
-      cursor: default;
     }
 
     .hint {
@@ -117,13 +118,13 @@
         font-size: 27px;
       }
 
-      #status {
-        font-size: 18px;
-      }
-
       #result {
         font-size: 25px;
-        padding: 22px 12px;
+        padding: 16px 10px;
+      }
+
+      #status {
+        font-size: 18px;
       }
     }
   </style>
@@ -133,11 +134,12 @@
 
   <h1>社員受付</h1>
 
+  <!-- 受付結果を画面上部に表示 -->
+  <div id="result" aria-live="polite"></div>
+
   <p id="status">カメラを準備しています…</p>
 
   <div id="reader"></div>
-
-  <div id="result" aria-live="polite"></div>
 
   <div id="buttons"></div>
 
@@ -158,14 +160,8 @@
     // ========================================
     let scanner = null;
     let processing = false;
-
-    // 直前に処理したQR
     let lastHandledToken = "";
-
-    // 結果表示タイマー
     let messageTimer = null;
-
-    // 音声
     let audioContext = null;
 
     // ========================================
@@ -178,8 +174,8 @@
     }
 
     // ========================================
-    // 音声を準備
-    // 最初の画面操作でブラウザの制限に対応
+    // 音声の準備
+    // 最初に画面をタップして音声を有効化
     // ========================================
     function prepareAudio() {
       try {
@@ -209,7 +205,7 @@
 
     // ========================================
     // 成功音：大きなピンポーン！
-    // 出席記録の成功後に再生
+    // 出席記録成功時に再生
     // ========================================
     function playSuccessSound() {
       try {
@@ -318,7 +314,6 @@
         if (finished) return;
 
         finished = true;
-
         clearTimeout(timer);
 
         try {
@@ -388,25 +383,20 @@
 
       if (!token) return;
 
-      // 同じQRが映り続けている場合は再送信しない
+      // 同じQRが映り続ける場合の重複処理を防止
       if (token === lastHandledToken) return;
 
-      // 通信開始前にロック
       processing = true;
       lastHandledToken = token;
 
       clearTimeout(messageTimer);
-
       document.getElementById("buttons").innerHTML = "";
 
       setStatus("認証中・出席を記録しています…");
 
-      showMessage(
-        "認証中…",
-        "waiting"
-      );
+      showMessage("認証中…", "waiting");
 
-      // QRID検証と出席記録を1回の通信で実行
+      // QRIDの検証と出席記録を1回の通信で実行
       requestJSONP(
         {
           action: "attendance",
@@ -417,9 +407,7 @@
           processing = false;
 
           if (!response || !response.ok) {
-            setStatus(
-              "出席記録ができませんでした"
-            );
+            setStatus("出席記録ができませんでした");
 
             showMessage(
               "✕ 記録失敗\n\n" +
@@ -434,13 +422,12 @@
             return;
           }
 
-          // 記録成功時に音を鳴らす
+          // 成功音
           playSuccessSound();
 
-          setStatus(
-            "次の方を受付できます"
-          );
+          setStatus("次の方を受付できます");
 
+          // 画面上部に大きく表示
           showMessage(
             "✓ 受付完了！\n" +
             response.name + " さん\n\n" +
@@ -448,16 +435,14 @@
             "ok"
           );
 
-          // 表示だけ消す。カメラは動かしたまま
+          // 結果表示だけ消す。カメラは動作継続
           clearResultLater();
         },
 
         message => {
           processing = false;
 
-          setStatus(
-            "通信に失敗しました"
-          );
+          setStatus("通信に失敗しました");
 
           showMessage(
             "✕ 通信エラー\n\n" + message,
@@ -479,17 +464,15 @@
       buttons.innerHTML = "";
 
       const retry = document.createElement("button");
-
       retry.textContent = "もう一度読み取る";
 
       retry.onclick = () => {
         if (processing) return;
 
-        // 同じカードでも再試行可能にする
+        // 同じカードを再試行できるようにする
         lastHandledToken = "";
 
         buttons.innerHTML = "";
-
         showMessage("", "");
 
         setStatus(
