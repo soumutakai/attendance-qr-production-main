@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -14,21 +13,25 @@
       box-sizing: border-box;
     }
 
+    /* 全体：どうぶつの森風のやさしい自然カラー */
     body {
-      font-family: sans-serif;
+      font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
       text-align: center;
       padding: 12px;
       margin: 0;
-      background: #f7f9fc;
-      color: #222;
+      background: #f8f5e9;
+      color: #625746;
     }
 
     h1 {
       font-size: 32px;
       margin: 10px 0;
+      color: #657b50;
+      font-weight: 800;
+      letter-spacing: 0.03em;
     }
 
-    /* 受付結果：画面上部 */
+    /* 受付結果：画面上部。配置・文字サイズは維持 */
     #result {
       margin: 12px auto;
       padding: 20px 12px;
@@ -40,31 +43,36 @@
       line-height: 1.5;
       white-space: pre-line;
       overflow-wrap: anywhere;
-      border: 4px solid transparent;
-      border-radius: 16px;
+      border: 3px solid transparent;
+      border-radius: 18px;
     }
 
     #result:empty {
       display: none;
     }
 
+    /* 受付成功：ミルキーな若草色 */
     #result.ok {
-      color: #087b27;
-      background: #d9fbe2;
-      border-color: #16a34a;
-      box-shadow: 0 4px 16px rgba(0, 120, 40, 0.18);
+      color: #4f7848;
+      background: #edf6df;
+      border-color: #a9c58b;
+      box-shadow: 0 4px 14px rgba(91, 119, 68, 0.12);
     }
 
+    /* エラー：やわらかいコーラル */
     #result.error {
-      color: #c62828;
-      background: #fff0f0;
-      border-color: #dc2626;
+      color: #a64f43;
+      background: #fff0e9;
+      border-color: #e6a99a;
+      box-shadow: 0 4px 12px rgba(166, 79, 67, 0.08);
     }
 
+    /* 認証中：淡い空色 */
     #result.waiting {
-      color: #444;
-      background: #edf2f7;
-      border-color: #cbd5e1;
+      color: #5d6f73;
+      background: #eaf3f4;
+      border-color: #bfd8d9;
+      box-shadow: 0 4px 12px rgba(93, 111, 115, 0.08);
     }
 
     #status {
@@ -72,45 +80,63 @@
       font-weight: bold;
       min-height: 1.5em;
       margin: 10px 0;
+      color: #766b58;
     }
 
-    /* カメラ */
+    /* カメラ：サイズ・位置は維持し、外観だけ変更 */
     #reader {
       max-width: 500px;
       margin: 12px auto;
-      background: #fff;
-      border-radius: 12px;
+      background: #fffdf7;
+      border: 1px solid #e4dcc9;
+      border-radius: 16px;
       overflow: hidden;
+      box-shadow: 0 5px 16px rgba(100, 88, 65, 0.08);
     }
 
     #reader video {
       max-width: 100%;
     }
 
+    /* カメラライブラリ内のボタン */
     #reader button {
       font-size: 17px;
       padding: 10px 16px;
       margin: 6px;
-      border-radius: 8px;
+      border: 1px solid #d9c8a8;
+      border-radius: 12px;
+      background: #f3e7ce;
+      color: #655640;
       cursor: pointer;
     }
 
+    #reader button:hover {
+      background: #ead9b8;
+    }
+
+    /* 再試行などのボタン */
     #buttons button {
       font-size: 19px;
       font-weight: bold;
       padding: 13px 24px;
       margin: 8px;
-      border: none;
-      border-radius: 10px;
-      background: #2563eb;
-      color: #fff;
+      border: 1px solid #c7d5a9;
+      border-radius: 14px;
+      background: #829b65;
+      color: #fffdf7;
       cursor: pointer;
+      box-shadow: 0 3px 0 #6c8353;
+    }
+
+    #buttons button:active {
+      box-shadow: none;
+      transform: translateY(2px);
     }
 
     .hint {
       font-size: 15px;
       line-height: 1.7;
-      color: #555;
+      color: #857b68;
     }
 
     @media (max-width: 600px) {
