@@ -312,3 +312,415 @@
 
     // ========================================
     // QRIDの表記統一
+    // ========================================
+    function normalizeToken(token) {
+      return String(token || "")
+        .replace(/\s/g, "")
+        .trim();
+    }
+
+    // ========================================
+    // 音声の準備
+    // ========================================
+    function prepareAudio() {
+      try {
+        const AudioContextClass =
+          window.AudioContext ||
+          window.webkitAudioContext;
+
+        if (!AudioContextClass) return;
+
+        if (!audioContext) {
+          audioContext = new AudioContextClass();
+        }
+
+        if (audioContext.state === "suspended") {
+          audioContext.resume().catch(() => {});
+        }
+      } catch (error) {
+        console.log("音声を準備できませんでした", error);
+      }
+    }
+
+    document.addEventListener(
+      "pointerdown",
+      prepareAudio,
+      { once: true }
+    );
+
+    // ========================================
+    // 成功音
+    // ========================================
+    function playSuccessSound() {
+      try {
+        const AudioContextClass =
+          window.AudioContext ||
+          window.webkitAudioContext;
+
+        if (!AudioContextClass) return;
+
+        if (!audioContext) {
+          audioContext = new AudioContextClass();
+        }
+
+        const play = () => {
+          const now = audioContext.currentTime;
+
+          const tones = [
+            {
+              frequency: 880,
+              start: 0,
+              duration: 0.22
+            },
+            {
+              frequency: 1320,
+              start: 0.20,
+              duration: 0.40
+            }
+          ];
+
+          tones.forEach(tone => {
+            const oscillator =
+              audioContext.createOscillator();
+
+            const gain =
+              audioContext.createGain();
+
+            oscillator.type = "sine";
+            oscillator.frequency.value =
+              tone.frequency;
+
+            gain.gain.setValueAtTime(
+              0.0001,
+              now + tone.start
+            );
+
+            gain.gain.exponentialRampToValueAtTime(
+              0.8,
+              now + tone.start + 0.025
+            );
+
+            gain.gain.setValueAtTime(
+              0.8,
+              now + tone.start + tone.duration - 0.06
+            );
+
+            gain.gain.exponentialRampToValueAtTime(
+              0.0001,
+              now + tone.start + tone.duration
+            );
+
+            oscillator.connect(gain);
+            gain.connect(audioContext.destination);
+
+            oscillator.start(now + tone.start);
+
+            oscillator.stop(
+              now + tone.start + tone.duration
+            );
+          });
+        };
+
+        if (audioContext.state === "suspended") {
+          audioContext.resume()
+            .then(play)
+            .catch(error => {
+              console.log("成功音を再生できませんでした", error);
+            });
+        } else {
+          play();
+        }
+
+      } catch (error) {
+        console.log("成功音を再生できませんでした", error);
+      }
+    }
+
+    // ========================================
+    // Apps ScriptとのJSONP通信
+    // ========================================
+    function requestJSONP(params, onSuccess, onError) {
+      const callbackName =
+        "qrCallback_" +
+        Date.now() + "_" +
+        Math.floor(Math.random() * 1000000);
+
+      const script = document.createElement("script");
+
+      let finished = false;
+
+      const timer = setTimeout(() => {
+        cleanup();
+        onError("通信がタイムアウトしました。");
+      }, 15000);
+
+      function cleanup() {
+        if (finished) return;
+
+        finished = true;
+        clearTimeout(timer);
+
+        try {
+          delete window[callbackName];
+        } catch (error) {
+          window[callbackName] = undefined;
+        }
+
+        script.remove();
+      }
+
+      window[callbackName] = response => {
+        cleanup();
+        onSuccess(response);
+      };
+
+      script.onerror = () => {
+        cleanup();
+        onError("サーバーとの通信に失敗しました。");
+      };
+
+      const query = new URLSearchParams({
+        ...params,
+        callback: callbackName,
+        t: Date.now()
+      });
+
+      script.src =
+        APPS_SCRIPT_URL + "?" + query.toString();
+
+      document.body.appendChild(script);
+    }
+
+    // ========================================
+    // 画面表示
+    // ========================================
+    function setStatus(message) {
+      document.getElementById("status").textContent =
+        message;
+    }
+
+    function showMessage(message, type) {
+      const result = document.getElementById("result");
+
+      result.textContent = message;
+      result.className = type || "";
+    }
+
+    function clearResultLater() {
+      clearTimeout(messageTimer);
+
+      messageTimer = setTimeout(() => {
+        if (!processing) {
+          showMessage("", "");
+        }
+      }, 2500);
+    }
+
+    // ========================================
+    // QR認識後の自動出席記録
+    // ========================================
+    function onScanSuccess(decodedText) {
+      if (processing) return;
+
+      const token = normalizeToken(decodedText);
+
+      if (!token) return;
+
+      // 同じQRの重複処理を防止
+      if (token === lastHandledToken) return;
+
+      processing = true;
+      lastHandledToken = token;
+
+      clearTimeout(messageTimer);
+      document.getElementById("buttons").innerHTML = "";
+
+      setStatus("認証中・出席を記録しています…");
+
+      showMessage("認証中…", "waiting");
+
+      // QRIDの検証と出席記録
+      requestJSONP(
+        {
+          action: "attendance",
+          token: token
+        },
+
+        response => {
+          processing = false;
+
+          if (!response || !response.ok) {
+            setStatus("出席記録ができませんでした");
+
+            showMessage(
+              "✕ 記録失敗\n\n" +
+              (
+                response?.message ||
+                "QRカードを確認してください。"
+              ),
+              "error"
+            );
+
+            showRetryButton();
+            return;
+          }
+
+          // 成功音
+          playSuccessSound();
+
+          setStatus("次の方を受付できます");
+
+          showMessage(
+            "✓ 受付完了！\n" +
+            response.name + " さん\n\n" +
+            "出席記録が完了しました",
+            "ok"
+          );
+
+          // 結果表示だけ消す。カメラは動作継続
+          clearResultLater();
+        },
+
+        message => {
+          processing = false;
+
+          setStatus("通信に失敗しました");
+
+          showMessage(
+            "✕ 通信エラー\n\n" + message,
+            "error"
+          );
+
+          showRetryButton();
+        }
+      );
+    }
+
+    // ========================================
+    // エラー時の再試行
+    // ========================================
+    function showRetryButton() {
+      const buttons =
+        document.getElementById("buttons");
+
+      buttons.innerHTML = "";
+
+      const retry = document.createElement("button");
+      retry.textContent = "もう一度読み取る";
+
+      retry.onclick = () => {
+        if (processing) return;
+
+        // 同じカードを再試行できるようにする
+        lastHandledToken = "";
+
+        buttons.innerHTML = "";
+        showMessage("", "");
+
+        setStatus(
+          "QRカードをカメラに映してください"
+        );
+
+        // カメラの再起動はしない
+      };
+
+      buttons.appendChild(retry);
+    }
+
+    // ========================================
+    // カメラボタンの日本語化
+    // ========================================
+    function translateCameraButtons() {
+      document.querySelectorAll("#reader button")
+        .forEach(button => {
+          const text = button.textContent.trim();
+
+          if (
+            text.includes("Request Camera Permissions") ||
+            text.includes("Start Camera")
+          ) {
+            button.textContent = "カメラを起動";
+          }
+
+          if (text.includes("Stop Scanning")) {
+            button.textContent = "カメラを停止";
+          }
+
+          if (text.includes("Scan an Image File")) {
+            button.textContent = "画像ファイルを読み取る";
+          }
+        });
+    }
+
+    // ========================================
+    // カメラを起動
+    // ========================================
+    function startScanner() {
+      if (scanner) return;
+
+      if (typeof Html5QrcodeScanner === "undefined") {
+        setStatus(
+          "QR読み取りライブラリを読み込めません"
+        );
+
+        showMessage(
+          "インターネット接続を確認して再読み込みしてください。",
+          "error"
+        );
+
+        return;
+      }
+
+      setStatus("カメラを起動しています…");
+
+      try {
+        scanner = new Html5QrcodeScanner(
+          "reader",
+          {
+            fps: 20,
+            qrbox: {
+              width: 280,
+              height: 280
+            },
+            rememberLastUsedCamera: true
+          },
+          false
+        );
+
+        scanner.render(
+          decodedText => {
+            onScanSuccess(decodedText);
+          },
+          () => {
+            // QR未検出時は何も表示しない
+          }
+        );
+
+        setTimeout(translateCameraButtons, 300);
+        setTimeout(translateCameraButtons, 1000);
+        setTimeout(translateCameraButtons, 2000);
+
+        setStatus(
+          "QRカードをカメラに映してください"
+        );
+
+      } catch (error) {
+        scanner = null;
+
+        setStatus("カメラを起動できません");
+
+        showMessage(
+          "カメラの起動に失敗しました。ページを再読み込みしてください。",
+          "error"
+        );
+      }
+    }
+
+    // ========================================
+    // 初回起動
+    // ========================================
+    startScanner();
+  </script>
+
+</body>
+</html>
