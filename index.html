@@ -13,144 +13,264 @@
       box-sizing: border-box;
     }
 
-    /* 全体：どうぶつの森風のやさしい自然カラー */
+    :root {
+      --brown: #805337;
+      --brown-dark: #704329;
+      --cream: #fff8e8;
+      --cream-border: #f4d6ad;
+      --green: #5ca56d;
+    }
+
     body {
-      font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
       text-align: center;
-      padding: 12px;
+      padding: 20px 12px 28px;
       margin: 0;
-      background: #f8f5e9;
-      color: #625746;
+      min-height: 100vh;
+      color: var(--brown);
+      background-color: #fff5d9;
+      background-image: url("background.png");
+      background-position: center top;
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
     }
 
+    /* タイトル：木の看板風 */
     h1 {
-      font-size: 32px;
-      margin: 10px 0;
-      color: #657b50;
-      font-weight: 800;
-      letter-spacing: 0.03em;
+      display: inline-block;
+      position: relative;
+      max-width: 94%;
+      margin: 12px auto 24px;
+      padding: 14px 42px 16px;
+      border: 4px solid #d99b5d;
+      border-radius: 28px 24px 30px 22px;
+      background: linear-gradient(
+        180deg,
+        #ffe0a1 0%,
+        #f8c77f 55%,
+        #edb56e 100%
+      );
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,.65),
+        inset 0 -4px 0 rgba(156,91,43,.12),
+        0 5px 0 rgba(151,94,49,.12);
+      color: #794727;
+      font-size: clamp(25px, 4vw, 42px);
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-shadow: 0 1px 0 rgba(255,255,255,.6);
     }
 
-    /* 受付結果：画面上部。配置・文字サイズは維持 */
+    /* 受付結果パネル */
     #result {
-      margin: 12px auto;
-      padding: 20px 12px;
+      margin: 12px auto 16px;
+      padding: 20px 16px;
       width: 100%;
-      max-width: 650px;
+      max-width: 820px;
       min-height: 0;
-      font-size: 30px;
-      font-weight: bold;
+      font-size: clamp(23px, 3vw, 36px);
+      font-weight: 900;
       line-height: 1.5;
       white-space: pre-line;
       overflow-wrap: anywhere;
-      border: 3px solid transparent;
-      border-radius: 18px;
+      border: 5px solid var(--cream-border);
+      border-radius: 48px;
+      background: rgba(255, 249, 233, .96);
+      box-shadow:
+        0 5px 0 rgba(184, 129, 73, .10),
+        inset 0 0 0 2px rgba(255,255,255,.8);
     }
 
     #result:empty {
       display: none;
     }
 
-    /* 受付成功：ミルキーな若草色 */
     #result.ok {
-      color: #4f7848;
-      background: #edf6df;
-      border-color: #a9c58b;
-      box-shadow: 0 4px 14px rgba(91, 119, 68, 0.12);
+      color: #805337;
+      background: rgba(255, 249, 233, .97);
+      border-color: #f0d1a6;
     }
 
-    /* エラー：やわらかいコーラル */
     #result.error {
-      color: #a64f43;
-      background: #fff0e9;
-      border-color: #e6a99a;
-      box-shadow: 0 4px 12px rgba(166, 79, 67, 0.08);
+      color: #a8322c;
+      background: rgba(255, 244, 233, .98);
+      border-color: #e5a08b;
     }
 
-    /* 認証中：淡い空色 */
     #result.waiting {
-      color: #5d6f73;
-      background: #eaf3f4;
-      border-color: #bfd8d9;
-      box-shadow: 0 4px 12px rgba(93, 111, 115, 0.08);
+      color: #805337;
+      background: rgba(255, 249, 233, .97);
+      border-color: #e8c89d;
     }
 
+    /* 状態表示 */
     #status {
-      font-size: 21px;
-      font-weight: bold;
-      min-height: 1.5em;
-      margin: 10px 0;
-      color: #766b58;
+      display: block;
+      width: fit-content;
+      max-width: 95%;
+      margin: 12px auto;
+      padding: 6px 18px;
+      border-radius: 18px;
+      color: var(--brown);
+      background: rgba(255, 249, 233, .70);
+      font-size: clamp(17px, 2.2vw, 23px);
+      font-weight: 900;
+      line-height: 1.5;
+      text-shadow: 0 1px 0 rgba(255,255,255,.85);
     }
 
-    /* カメラ：サイズ・位置は維持し、外観だけ変更 */
+    /* カメラ：クリーム色の丸いフレーム */
     #reader {
-      max-width: 500px;
-      margin: 12px auto;
-      background: #fffdf7;
-      border: 1px solid #e4dcc9;
-      border-radius: 16px;
+      width: 100%;
+      max-width: 640px;
+      margin: 14px auto 10px;
+      padding: 10px;
+      border: 5px solid var(--cream-border);
+      border-radius: 38px;
+      background: rgba(255, 249, 233, .97);
+      box-shadow:
+        0 5px 0 rgba(184, 129, 73, .12),
+        inset 0 0 0 2px rgba(255,255,255,.85);
       overflow: hidden;
-      box-shadow: 0 5px 16px rgba(100, 88, 65, 0.08);
+      color: var(--brown);
     }
 
     #reader video {
+      display: block;
+      width: 100% !important;
       max-width: 100%;
+      border-radius: 24px;
+      object-fit: cover;
     }
 
-    /* カメラライブラリ内のボタン */
+    #reader__scan_region {
+      min-height: 240px;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #f7ead2;
+    }
+
+    #reader__scan_region video {
+      border-radius: 24px;
+    }
+
+    #reader__dashboard {
+      padding-top: 8px;
+      color: var(--brown);
+      font-size: 15px;
+    }
+
+    #reader__dashboard_section_csr,
+    #reader__dashboard_section_swaplink {
+      color: var(--brown);
+    }
+
+    #reader a {
+      color: var(--brown);
+    }
+
+    /* カメラ選択 */
+    #reader select {
+      max-width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e7c99f;
+      border-radius: 999px;
+      background: #fff4dc;
+      color: var(--brown);
+      font-size: 15px;
+    }
+
+    /* カメラ操作ボタン */
     #reader button {
-      font-size: 17px;
-      padding: 10px 16px;
-      margin: 6px;
-      border: 1px solid #d9c8a8;
-      border-radius: 12px;
-      background: #f3e7ce;
-      color: #655640;
+      max-width: 100%;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 11px 17px;
+      margin: 5px;
+      border: 2px solid #e5c29a;
+      border-radius: 999px;
+      background: linear-gradient(#d6a77e, #bd895f);
+      color: #fff;
       cursor: pointer;
+      box-shadow: 0 2px 0 rgba(126, 78, 43, .12);
     }
 
-    #reader button:hover {
-      background: #ead9b8;
+    #reader button:hover,
+    #buttons button:hover {
+      filter: brightness(1.04);
     }
 
-    /* 再試行などのボタン */
+    /* 再試行ボタン */
     #buttons button {
-      font-size: 19px;
-      font-weight: bold;
+      font-size: 18px;
+      font-weight: 900;
       padding: 13px 24px;
       margin: 8px;
-      border: 1px solid #c7d5a9;
-      border-radius: 14px;
-      background: #829b65;
-      color: #fffdf7;
+      border: 2px solid #e5c29a;
+      border-radius: 999px;
+      background: linear-gradient(#d6a77e, #bd895f);
+      color: #fff;
       cursor: pointer;
-      box-shadow: 0 3px 0 #6c8353;
+      box-shadow: 0 3px 0 rgba(126, 78, 43, .14);
     }
 
-    #buttons button:active {
-      box-shadow: none;
-      transform: translateY(2px);
-    }
-
+    /* 画面下の案内 */
     .hint {
-      font-size: 15px;
-      line-height: 1.7;
-      color: #857b68;
+      display: inline-block;
+      max-width: 640px;
+      margin: 12px auto;
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: rgba(255, 249, 233, .68);
+      color: var(--brown);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.8;
+      text-shadow: 0 1px 0 rgba(255,255,255,.85);
     }
 
+    /* スマホ・タブレット向け */
     @media (max-width: 600px) {
+      body {
+        padding: 12px 8px 22px;
+      }
+
       h1 {
-        font-size: 27px;
+        margin: 8px auto 18px;
+        padding: 11px 24px 13px;
+        border-radius: 22px;
+        letter-spacing: .08em;
       }
 
       #result {
-        font-size: 25px;
         padding: 16px 10px;
+        border-radius: 30px;
+        border-width: 4px;
+      }
+
+      #reader {
+        padding: 7px;
+        border-width: 4px;
+        border-radius: 28px;
+      }
+
+      #reader__scan_region,
+      #reader video {
+        border-radius: 18px;
+      }
+
+      #reader button {
+        font-size: 14px;
+        padding: 9px 12px;
       }
 
       #status {
-        font-size: 18px;
+        font-size: 17px;
+      }
+
+      .hint {
+        font-size: 14px;
       }
     }
   </style>
@@ -192,419 +312,3 @@
 
     // ========================================
     // QRIDの表記統一
-    // ========================================
-    function normalizeToken(token) {
-      return String(token || "")
-        .replace(/\s/g, "")
-        .trim();
-    }
-
-    // ========================================
-    // 音声の準備
-    // 最初に画面をタップして音声を有効化
-    // ========================================
-    function prepareAudio() {
-      try {
-        const AudioContextClass =
-          window.AudioContext ||
-          window.webkitAudioContext;
-
-        if (!AudioContextClass) return;
-
-        if (!audioContext) {
-          audioContext = new AudioContextClass();
-        }
-
-        if (audioContext.state === "suspended") {
-          audioContext.resume().catch(() => {});
-        }
-      } catch (error) {
-        console.log("音声を準備できませんでした", error);
-      }
-    }
-
-    document.addEventListener(
-      "pointerdown",
-      prepareAudio,
-      { once: true }
-    );
-
-    // ========================================
-    // 成功音：大きなピンポーン！
-    // 出席記録成功時に再生
-    // ========================================
-    function playSuccessSound() {
-      try {
-        const AudioContextClass =
-          window.AudioContext ||
-          window.webkitAudioContext;
-
-        if (!AudioContextClass) return;
-
-        if (!audioContext) {
-          audioContext = new AudioContextClass();
-        }
-
-        const play = () => {
-          const now = audioContext.currentTime;
-
-          const tones = [
-            {
-              frequency: 880,
-              start: 0,
-              duration: 0.22
-            },
-            {
-              frequency: 1320,
-              start: 0.20,
-              duration: 0.40
-            }
-          ];
-
-          tones.forEach(tone => {
-            const oscillator =
-              audioContext.createOscillator();
-
-            const gain =
-              audioContext.createGain();
-
-            oscillator.type = "sine";
-            oscillator.frequency.value =
-              tone.frequency;
-
-            gain.gain.setValueAtTime(
-              0.0001,
-              now + tone.start
-            );
-
-            gain.gain.exponentialRampToValueAtTime(
-              0.8,
-              now + tone.start + 0.025
-            );
-
-            gain.gain.setValueAtTime(
-              0.8,
-              now + tone.start + tone.duration - 0.06
-            );
-
-            gain.gain.exponentialRampToValueAtTime(
-              0.0001,
-              now + tone.start + tone.duration
-            );
-
-            oscillator.connect(gain);
-            gain.connect(audioContext.destination);
-
-            oscillator.start(now + tone.start);
-
-            oscillator.stop(
-              now + tone.start + tone.duration
-            );
-          });
-        };
-
-        if (audioContext.state === "suspended") {
-          audioContext.resume()
-            .then(play)
-            .catch(error => {
-              console.log("成功音を再生できませんでした", error);
-            });
-        } else {
-          play();
-        }
-
-      } catch (error) {
-        console.log("成功音を再生できませんでした", error);
-      }
-    }
-
-    // ========================================
-    // Apps ScriptとのJSONP通信
-    // ========================================
-    function requestJSONP(params, onSuccess, onError) {
-      const callbackName =
-        "qrCallback_" +
-        Date.now() + "_" +
-        Math.floor(Math.random() * 1000000);
-
-      const script = document.createElement("script");
-
-      let finished = false;
-
-      const timer = setTimeout(() => {
-        cleanup();
-        onError("通信がタイムアウトしました。");
-      }, 15000);
-
-      function cleanup() {
-        if (finished) return;
-
-        finished = true;
-        clearTimeout(timer);
-
-        try {
-          delete window[callbackName];
-        } catch (error) {
-          window[callbackName] = undefined;
-        }
-
-        script.remove();
-      }
-
-      window[callbackName] = response => {
-        cleanup();
-        onSuccess(response);
-      };
-
-      script.onerror = () => {
-        cleanup();
-        onError("サーバーとの通信に失敗しました。");
-      };
-
-      const query = new URLSearchParams({
-        ...params,
-        callback: callbackName,
-        t: Date.now()
-      });
-
-      script.src =
-        APPS_SCRIPT_URL + "?" + query.toString();
-
-      document.body.appendChild(script);
-    }
-
-    // ========================================
-    // 画面表示
-    // ========================================
-    function setStatus(message) {
-      document.getElementById("status").textContent =
-        message;
-    }
-
-    function showMessage(message, type) {
-      const result = document.getElementById("result");
-
-      result.textContent = message;
-      result.className = type || "";
-    }
-
-    function clearResultLater() {
-      clearTimeout(messageTimer);
-
-      messageTimer = setTimeout(() => {
-        if (!processing) {
-          showMessage("", "");
-        }
-      }, 2500);
-    }
-
-    // ========================================
-    // QR認識後の自動出席記録
-    // カメラは停止しない
-    // ========================================
-    function onScanSuccess(decodedText) {
-      if (processing) return;
-
-      const token = normalizeToken(decodedText);
-
-      if (!token) return;
-
-      // 同じQRが映り続ける場合の重複処理を防止
-      if (token === lastHandledToken) return;
-
-      processing = true;
-      lastHandledToken = token;
-
-      clearTimeout(messageTimer);
-      document.getElementById("buttons").innerHTML = "";
-
-      setStatus("認証中・出席を記録しています…");
-
-      showMessage("認証中…", "waiting");
-
-      // QRIDの検証と出席記録を1回の通信で実行
-      requestJSONP(
-        {
-          action: "attendance",
-          token: token
-        },
-
-        response => {
-          processing = false;
-
-          if (!response || !response.ok) {
-            setStatus("出席記録ができませんでした");
-
-            showMessage(
-              "✕ 記録失敗\n\n" +
-              (
-                response?.message ||
-                "QRカードを確認してください。"
-              ),
-              "error"
-            );
-
-            showRetryButton();
-            return;
-          }
-
-          // 成功音
-          playSuccessSound();
-
-          setStatus("次の方を受付できます");
-
-          // 画面上部に大きく表示
-          showMessage(
-            "✓ 受付完了！\n" +
-            response.name + " さん\n\n" +
-            "出席記録が完了しました",
-            "ok"
-          );
-
-          // 結果表示だけ消す。カメラは動作継続
-          clearResultLater();
-        },
-
-        message => {
-          processing = false;
-
-          setStatus("通信に失敗しました");
-
-          showMessage(
-            "✕ 通信エラー\n\n" + message,
-            "error"
-          );
-
-          showRetryButton();
-        }
-      );
-    }
-
-    // ========================================
-    // エラー時の再試行
-    // ========================================
-    function showRetryButton() {
-      const buttons =
-        document.getElementById("buttons");
-
-      buttons.innerHTML = "";
-
-      const retry = document.createElement("button");
-      retry.textContent = "もう一度読み取る";
-
-      retry.onclick = () => {
-        if (processing) return;
-
-        // 同じカードを再試行できるようにする
-        lastHandledToken = "";
-
-        buttons.innerHTML = "";
-        showMessage("", "");
-
-        setStatus(
-          "QRカードをカメラに映してください"
-        );
-
-        // カメラの再起動はしない
-      };
-
-      buttons.appendChild(retry);
-    }
-
-    // ========================================
-    // カメラボタンの日本語化
-    // ========================================
-    function translateCameraButtons() {
-      document.querySelectorAll("#reader button")
-        .forEach(button => {
-          const text = button.textContent.trim();
-
-          if (
-            text.includes("Request Camera Permissions") ||
-            text.includes("Start Camera")
-          ) {
-            button.textContent = "カメラを起動";
-          }
-
-          if (text.includes("Stop Scanning")) {
-            button.textContent = "カメラを停止";
-          }
-
-          if (text.includes("Scan an Image File")) {
-            button.textContent = "画像ファイルを読み取る";
-          }
-        });
-    }
-
-    // ========================================
-    // カメラを最初の1回だけ起動
-    // ========================================
-    function startScanner() {
-      if (scanner) return;
-
-      if (typeof Html5QrcodeScanner === "undefined") {
-        setStatus(
-          "QR読み取りライブラリを読み込めません"
-        );
-
-        showMessage(
-          "インターネット接続を確認して再読み込みしてください。",
-          "error"
-        );
-
-        return;
-      }
-
-      setStatus("カメラを起動しています…");
-
-      try {
-        scanner = new Html5QrcodeScanner(
-          "reader",
-          {
-            fps: 20,
-            qrbox: {
-              width: 280,
-              height: 280
-            },
-            rememberLastUsedCamera: true
-          },
-          false
-        );
-
-        scanner.render(
-          decodedText => {
-            onScanSuccess(decodedText);
-          },
-          () => {
-            // QR未検出時は何も表示しない
-          }
-        );
-
-        setTimeout(translateCameraButtons, 300);
-        setTimeout(translateCameraButtons, 1000);
-        setTimeout(translateCameraButtons, 2000);
-
-        setStatus(
-          "QRカードをカメラに映してください"
-        );
-
-      } catch (error) {
-        scanner = null;
-
-        setStatus("カメラを起動できません");
-
-        showMessage(
-          "カメラの起動に失敗しました。ページを再読み込みしてください。",
-          "error"
-        );
-      }
-    }
-
-    // ========================================
-    // 初回起動
-    // ========================================
-    startScanner();
-  </script>
-
-</body>
-</html>
